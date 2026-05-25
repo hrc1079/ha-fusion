@@ -24,6 +24,7 @@
 	import { modals } from 'svelte-modals';
 	import Theme from '$lib/Components/Theme.svelte';
 	import Screensaver from '$lib/Components/Screensaver.svelte';
+	import Background from '$lib/Components/Background.svelte';
 
 	/**
 	 * Data from server-side load
@@ -193,6 +194,9 @@
 
 <!-- theme -->
 <Theme initial={data?.theme} />
+
+<!-- custom background (per-dashboard / per-view) -->
+<Background {view} />
 
 <div
 	id="layout"
