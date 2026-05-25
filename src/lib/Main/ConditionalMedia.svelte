@@ -54,6 +54,10 @@
 	$: app_id = currentAttr?.app_id;
 	$: entity_picture = currentAttr?.entity_picture;
 
+	// what to display in the state row (respects hide_artist)
+	// data references still use media_artist; only render references use displayed_artist
+	$: displayed_artist = sel?.hide_artist ? undefined : media_artist;
+
 	// paused media_player state, expire in seconds
 	$: timeout = sel?.timeout ?? 900;
 	$: if (currentEntityId || currentState || timeout || sel?.show_timeout) handlePaused(false);
@@ -61,7 +65,11 @@
 	$: active = currentState === 'playing' || (currentState === 'paused' && !pauseExpired);
 
 	// set background image
-	$: if ($youtubeAddon && (app_id === 'com.google.ios.youtube' || app_id === '2C6A6E3D') && active) {
+	$: if (
+		$youtubeAddon &&
+		(app_id === 'com.google.ios.youtube' || app_id === '2C6A6E3D') &&
+		active
+	) {
 		youtubeThumbnail(media_artist, media_title);
 	} else if (entity_picture && active) {
 		entityPicture();
@@ -361,18 +369,20 @@
 			{#if active}
 				<!-- activePlayer -->
 
-				<div class="name">
-					{getName(undefined, current_media_player)}
-				</div>
+				{#if !sel?.hide_name}
+					<div class="name">
+						{getName(undefined, current_media_player)}
+					</div>
+				{/if}
 
 				<div class="state">
 					<div class="measure" bind:clientWidth={contentWidth}>
 						<!-- snippet -->
-						{#if media_artist && media_title}
-							{media_artist} - {media_title}
-						{:else if media_artist && !media_title}
-							{media_artist}
-						{:else if !media_artist && media_title}
+						{#if displayed_artist && media_title}
+							{displayed_artist} - {media_title}
+						{:else if displayed_artist && !media_title}
+							{displayed_artist}
+						{:else if !displayed_artist && media_title}
 							{media_title}
 						{:else}
 							<StateLogic entity_id={current_media_player?.entity_id} selected={undefined} />
@@ -386,11 +396,11 @@
 							{:then Marquee}
 								<svelte:component this={Marquee.default}>
 									<!-- snippet -->
-									{#if media_artist && media_title}
-										{media_artist} - {media_title}
-									{:else if media_artist && !media_title}
-										{media_artist}
-									{:else if !media_artist && media_title}
+									{#if displayed_artist && media_title}
+										{displayed_artist} - {media_title}
+									{:else if displayed_artist && !media_title}
+										{displayed_artist}
+									{:else if !displayed_artist && media_title}
 										{media_title}
 									{:else}
 										<StateLogic entity_id={current_media_player?.entity_id} selected={undefined} />
@@ -400,11 +410,11 @@
 							{/await}
 						{:else}
 							<!-- snippet -->
-							{#if media_artist && media_title}
-								{media_artist} - {media_title}
-							{:else if media_artist && !media_title}
-								{media_artist}
-							{:else if !media_artist && media_title}
+							{#if displayed_artist && media_title}
+								{displayed_artist} - {media_title}
+							{:else if displayed_artist && !media_title}
+								{displayed_artist}
+							{:else if !displayed_artist && media_title}
 								{media_title}
 							{:else}
 								<StateLogic entity_id={current_media_player?.entity_id} selected={undefined} />
@@ -415,9 +425,11 @@
 			{:else}
 				<!-- nothing_playing -->
 
-				<div class="name">
-					{sel?.name || getName(undefined, entity) || $lang('nothing_playing')}
-				</div>
+				{#if !sel?.hide_name}
+					<div class="name">
+						{sel?.name || getName(undefined, entity) || $lang('nothing_playing')}
+					</div>
+				{/if}
 
 				<div class="state">
 					<div class="measure" bind:clientWidth={contentWidth}>

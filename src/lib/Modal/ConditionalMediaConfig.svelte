@@ -244,6 +244,46 @@
 			</button>
 		</div>
 
+		<h2>Hide media player name</h2>
+
+		<div class="button-container">
+			<button
+				class:selected={!sel?.hide_name}
+				on:click={() => set('hide_name')}
+				use:Ripple={$ripple}
+			>
+				{$lang('no')}
+			</button>
+
+			<button
+				class:selected={sel?.hide_name}
+				on:click={() => set('hide_name', true)}
+				use:Ripple={$ripple}
+			>
+				{$lang('yes')}
+			</button>
+		</div>
+
+		<h2>Hide media artist</h2>
+
+		<div class="button-container">
+			<button
+				class:selected={!sel?.hide_artist}
+				on:click={() => set('hide_artist')}
+				use:Ripple={$ripple}
+			>
+				{$lang('no')}
+			</button>
+
+			<button
+				class:selected={sel?.hide_artist}
+				on:click={() => set('hide_artist', true)}
+				use:Ripple={$ripple}
+			>
+				{$lang('yes')}
+			</button>
+		</div>
+
 		{#if debug}
 			<h2>Debug</h2>
 			<pre><code>{JSON.stringify(sel, null, 2)}</code></pre>
