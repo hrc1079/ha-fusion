@@ -23,6 +23,7 @@
 	import { browser } from '$app/environment';
 	import { modals } from 'svelte-modals';
 	import Theme from '$lib/Components/Theme.svelte';
+	import Screensaver from '$lib/Components/Screensaver.svelte';
 
 	/**
 	 * Data from server-side load
@@ -249,6 +250,9 @@
 		{/await}
 	{/if}
 </div>
+
+<!-- screensaver overlay (renders only when $dashboard.screensaver.enabled and idle timeout expires) -->
+<Screensaver />
 
 <style>
 	#layout {

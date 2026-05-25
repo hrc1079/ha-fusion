@@ -27,6 +27,14 @@ export interface Dashboard {
 	hide_views?: boolean;
 	hide_sidebar?: boolean;
 	sidebarWidth?: number;
+	screensaver?: ScreensaverConfig;
+}
+
+export interface ScreensaverConfig {
+	enabled?: boolean;
+	timeout?: number;
+	mode?: 'clock' | 'black' | 'template';
+	template?: string;
 }
 
 export interface Views {
