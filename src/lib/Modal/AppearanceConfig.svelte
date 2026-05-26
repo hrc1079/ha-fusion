@@ -15,7 +15,7 @@
 
 	$: visibilityNavigate = $dashboard?.hide_views;
 	$: visibilitySidebar = $dashboard?.hide_sidebar;
-	$: backgroundUrl = $dashboard?.background;
+	let backgroundUrl: string | undefined = $dashboard?.background;
 
 	onMount(async () => {
 		// something needs to be selected, set default
