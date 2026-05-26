@@ -16,6 +16,8 @@
 
 	let icon: string | undefined = sel?.icon;
 
+	let background: string | undefined = sel?.background;
+
 	const nameConst = name;
 
 	function set(key: string, event?: any) {
@@ -94,6 +96,28 @@
 				<Icon icon="vaadin:grid-small" height="none" />
 			</button>
 		</div>
+
+		<h2>Background URL</h2>
+
+		<InputClear
+			condition={background}
+			on:clear={() => {
+				background = undefined;
+				set('background');
+			}}
+			let:padding
+		>
+			<input
+				class="input"
+				type="text"
+				bind:value={background}
+				placeholder="https://… or /local/… (overrides dashboard background)"
+				on:change={(event) => set('background', event)}
+				style:padding
+				autocomplete="off"
+				spellcheck="false"
+			/>
+		</InputClear>
 
 		<ConfigButtons {sel} />
 	</Modal>

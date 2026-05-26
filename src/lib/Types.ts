@@ -28,6 +28,7 @@ export interface Dashboard {
 	hide_sidebar?: boolean;
 	sidebarWidth?: number;
 	screensaver?: ScreensaverConfig;
+	background?: string;
 }
 
 export interface ScreensaverConfig {
@@ -43,6 +44,7 @@ export interface Views {
 	icon?: string;
 	sections?: Section[];
 	isDndShadowItem?: boolean;
+	background?: string;
 }
 
 export interface Section {
@@ -85,6 +87,7 @@ export interface ViewItem {
 	name?: string;
 	icon?: string;
 	sections?: any[];
+	background?: string;
 }
 
 export interface EmptyItem {
