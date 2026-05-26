@@ -98,6 +98,16 @@
 			}
 		},
 		{
+			id: 'player_group',
+			type: 'Player Group',
+			component: Button,
+			preview_icon: 'mdi:speaker-multiple',
+			props: {
+				demo: undefined,
+				sel
+			}
+		},
+		{
 			id: 'camera',
 			type: $lang('camera'),
 			component: Camera,
@@ -174,6 +184,9 @@
 			}
 			case 'custom_panel':
 				openModal(() => import('$lib/Modal/CustomPanelConfig.svelte'), { sel });
+				break;
+			case 'player_group':
+				openModal(() => import('$lib/Modal/PlayerGroupConfig.svelte'), { sel });
 				break;
 			case 'empty':
 				openModal(() => import('$lib/Modal/EmptyConfig.svelte'), { sel });

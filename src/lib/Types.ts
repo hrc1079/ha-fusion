@@ -382,3 +382,23 @@ export interface CustomPanelItem {
 	rows?: ModalRow[];
 	primary_row_id?: number;
 }
+
+export interface PlayerGroupPlayer {
+	entity_id: string;
+	name?: string;
+	icon?: string;
+}
+
+export interface PlayerGroupItem {
+	type: 'player_group';
+	id: number;
+	name?: string;
+	icon?: string;
+	color?: string;
+	/** Player whose queue is transferred when "Cast" is pressed */
+	source_player?: string;
+	/** input_text helper that stores the comma-separated selection */
+	selection_helper?: string;
+	/** Available rooms (each maps to one media_player entity) */
+	players?: PlayerGroupPlayer[];
+}
