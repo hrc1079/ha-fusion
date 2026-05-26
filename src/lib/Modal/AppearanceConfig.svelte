@@ -5,7 +5,6 @@
 	import { onMount } from 'svelte';
 	import Icon from '@iconify/svelte';
 	import ConfigButtons from '$lib/Modal/ConfigButtons.svelte';
-	import InputClear from '$lib/Components/InputClear.svelte';
 	import Modal from '$lib/Modal/Index.svelte';
 	import Ripple from 'svelte-ripple';
 
@@ -15,7 +14,6 @@
 
 	$: visibilityNavigate = $dashboard?.hide_views;
 	$: visibilitySidebar = $dashboard?.hide_sidebar;
-	let backgroundUrl: string | undefined = $dashboard?.background;
 
 	onMount(async () => {
 		// something needs to be selected, set default
@@ -54,21 +52,6 @@
 	function handleSidebar(state: boolean) {
 		$dashboard.hide_sidebar = state;
 		$record();
-	}
-
-	function handleBackground(value: string | undefined) {
-		if (value === undefined || value === '') {
-			delete $dashboard.background;
-		} else {
-			$dashboard.background = value;
-		}
-		$dashboard = $dashboard;
-		$record();
-	}
-
-	function onBackgroundChange(event: Event) {
-		const target = event.target as HTMLInputElement;
-		handleBackground(target.value);
 	}
 
 	let mounted = false;
@@ -140,27 +123,6 @@
 				{$lang('hidden')}
 			</button>
 		</div>
-
-		<h2>Background URL</h2>
-		<InputClear
-			condition={backgroundUrl}
-			on:clear={() => {
-				backgroundUrl = undefined;
-				handleBackground(undefined);
-			}}
-			let:padding
-		>
-			<input
-				class="input"
-				type="text"
-				bind:value={backgroundUrl}
-				placeholder="https://… or /local/…"
-				on:change={onBackgroundChange}
-				style:padding
-				autocomplete="off"
-				spellcheck="false"
-			/>
-		</InputClear>
 
 		<h1 style:margin-top="1.9rem">{$lang('theme')}</h1>
 
