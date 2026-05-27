@@ -8,11 +8,12 @@
 	import Empty from '$lib/Main/Empty.svelte';
 	import CustomPanel from '$lib/Main/CustomPanel.svelte';
 	import PlayerGroup from '$lib/Main/PlayerGroup.svelte';
+	import PlexHubRow from '$lib/Main/PlexHubRow.svelte';
 
 	export let item: any;
 	export let sectionName: string | undefined = undefined;
 
-	const large = ['conditional_media', 'picture_elements', 'camera'];
+	const large = ['conditional_media', 'picture_elements', 'camera', 'plex_hub_row'];
 </script>
 
 {#if item?.[SHADOW_ITEM_MARKER_PROPERTY_NAME] && large.includes(item?.type)}
@@ -35,6 +36,8 @@
 	<CustomPanel sel={item} />
 {:else if item?.type === 'player_group'}
 	<PlayerGroup sel={item} />
+{:else if item?.type === 'plex_hub_row'}
+	<PlexHubRow sel={item} />
 {:else}
 	<!-- if types are changed internally, don't break ui -->
 	<Configure sel={{ id: item?.id }} />
