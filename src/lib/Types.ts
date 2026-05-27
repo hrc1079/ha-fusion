@@ -11,6 +11,16 @@ export interface Configuration {
 	motion?: boolean;
 	addons?: Addons;
 	token?: string;
+	plex?: PlexConfig;
+}
+
+export interface PlexConfig {
+	enabled?: boolean;
+	url?: string;
+	server_token?: string;
+	account_token?: string;
+	target_client_id?: string;
+	server_machine_id?: string;
 }
 
 export interface Addons {
@@ -119,6 +129,22 @@ export interface ButtonItem {
 			service?: string;
 		};
 	};
+}
+
+export interface PlexHubRowItem {
+	type: 'plex_hub_row';
+	id: number;
+	/**
+	 * Identifier for which set of media to render.
+	 * Supported values:
+	 *  - "continue_watching"        → /hubs/continueWatching
+	 *  - "section_recent:<id>"      → /library/sections/<id>/recentlyAdded
+	 */
+	source: string;
+	/** Display name shown above the row */
+	name?: string;
+	/** Maximum number of items to fetch and render (default 12) */
+	limit?: number;
 }
 
 export interface Template {
