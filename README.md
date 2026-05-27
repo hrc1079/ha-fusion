@@ -10,7 +10,7 @@ This is a personal fork of [ha-fusion](https://github.com/amedello/ha-fusion) by
 
 ## What's new in this fork
 
-Three features added on top of amedello's fork:
+Five features added on top of amedello's fork:
 
 ### 🎨 Per-view custom backgrounds
 
@@ -59,6 +59,36 @@ Two new opt-in fields on the `conditional_media` tile to remove the friendly_nam
   hide_name: true # drop the friendly_name row
   hide_artist: true # drop the media_artist prefix
 ```
+
+### 🔊 Player Group tile
+
+A new dashboard item type — `player_group` — for multi-room music casting. Tapping the tile opens a modal where you select one or more target rooms, then Cast transfers the source player's queue to the first selected room and joins the rest via the standard `media_player.join` service. Selection state persists in an `input_text` helper so it survives page reloads.
+
+Designed for grouping speakers that support synchronized playback (e.g. Sonos-to-Sonos). Mixed-protocol grouping (e.g. Sonos + Chromecast) is unreliable due to underlying Cast protocol limitations — configure each tile with compatible targets only.
+
+```yaml
+- type: player_group
+  name: Send to Sonos
+  icon: mdi:speaker-multiple
+  source_player: media_player.family_room_display_audio
+  selection_helper: input_text.music_room_selection
+  players:
+    - entity_id: media_player.family_room
+      name: Family Room (Sonos Arc)
+      icon: mdi:speaker
+    - entity_id: media_player.living_room
+      name: Living Room (Era 100)
+      icon: mdi:speaker
+```
+
+Required: a helper of type `input_text` (max length ≥ 255) referenced by `selection_helper` to store the comma-separated selection.
+
+### 🪟 Modal polish for custom backgrounds
+
+Two small layout fixes that work better with the custom backgrounds feature above:
+
+- When the dashboard has a custom background URL, the modal backdrop respects it — a translucent dark overlay is used instead of the theme background image so the user's chosen background remains visible behind the modal contents.
+- Media player artwork is capped at `max-height: 35vh` with `object-fit: contain`, so square album art and tall radio-station logos don't push transport controls off-screen.
 
 ---
 
@@ -198,6 +228,8 @@ data:
   url: http://192.168.x.x:5050 # your ha-fusion URL (LAN-accessible)
   force: true
 ```
+
+**Note on Cast Display audio:** Google Cast on Display devices (Nest Hubs) always claims the screen for audio playback — including Music Assistant's player UI and the Default Media Receiver. The `Use MA Cast App` toggle in MA settings does not change this. The practical workflow is to let MA take the screen while music plays and return to ha-fusion on pause/idle via a Home Assistant automation watching the player's state.
 
 ---
 
