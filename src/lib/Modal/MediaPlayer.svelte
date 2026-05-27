@@ -435,12 +435,16 @@
 
 <style>
 	img {
-		width: 100%;
+		max-width: 100%;
+		max-height: 35vh;
+		width: auto;
+		height: auto;
 		border-radius: 0.6rem;
 		pointer-events: none;
 		align-self: center;
 		margin-top: 0.8rem;
 		margin-bottom: 0.6rem;
+		object-fit: contain;
 		box-shadow:
 			rgba(0, 0, 0, 0.3) 0px 19px 38px,
 			rgba(0, 0, 0, 0.22) 0px 15px 12px;
