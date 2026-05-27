@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { motion, autocompleteOpen, ripple, dragging } from '$lib/Stores';
+	import { motion, autocompleteOpen, ripple, dragging, dashboard } from '$lib/Stores';
 	import { onMount, onDestroy } from 'svelte';
 	import { modals, closeModal } from 'svelte-modals';
 	import { fly, scale } from 'svelte/transition';
@@ -73,10 +73,22 @@
 		if (document?.body) document.body.style.overflow = 'hidden';
 
 		backdrop = document.querySelector('div.backdrop');
+		// If the dashboard has a custom background set, prefer it over the
+		// theme's background image so the modal blurs the user's chosen
+		// background instead of replacing it.
+		const customBg = typeof $dashboard?.background === 'string' ? $dashboard.background : undefined;
 		if (backdropImage) {
 			if (backdrop) {
-				backdrop.style.backgroundColor = 'black';
-				backdrop.style.backgroundImage = 'var(--theme-background-image)';
+				if (customBg) {
+					// Keep the custom background visible behind the modal,
+					// with a slight dark overlay so modal contents still have
+					// good contrast. The .contents element has its own background.
+					backdrop.style.backgroundColor = 'rgba(0, 0, 0, 0.35)';
+					backdrop.style.backgroundImage = 'none';
+				} else {
+					backdrop.style.backgroundColor = 'black';
+					backdrop.style.backgroundImage = 'var(--theme-background-image)';
+				}
 			}
 		} else {
 			if (backdrop) {
