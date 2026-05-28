@@ -3,29 +3,44 @@ import type { RequestHandler } from './$types';
 import { readFile } from 'fs/promises';
 import yaml from 'js-yaml';
 import { loadPlexConfig } from '$lib/Server/plex';
-import type { Configuration } from '$lib/Types';
+import type { Configuration, PlexConfig } from '$lib/Types';
 
 /**
  * POST /_api/plex/play
  * Body: { ratingKey: string, offset?: number }
  *
- * Routes through the Plex Media Server's player proxy:
- *   POST <plex>/player/playback/playMedia
+ * Plays media on the configured Plex target client (typically a SHIELD
+ * running Plex Android TV). Routes through the Plex Media Server's player
+ * proxy: POST <plex>/player/playback/playMedia
  *
- * The server then forwards the play command to the configured target client
- * (typically the SHIELD running Plex Android TV) over Plex's pubsub channel.
+ * THE SHIELD PLEX BUG, AND THE FIX
  *
- * Foreground handling: Plex's Android TV companion API has a known issue
- * where playback can start in the background while another app (e.g.
- * YouTube TV) stays on screen. To fix that, if `android_tv_entity` is
- * configured AND we can read a HA token from configuration.yaml, we first
- * call HA's media_player.play_media service to launch the Plex app on the
- * target device. This forces Plex to the foreground before we issue
- * playMedia.
+ * The Plex Android TV companion API cannot cleanly REPLACE a video that's
+ * already playing on the SHIELD. A bare second playMedia leaves the new
+ * audio decoder running with no visible UI — the orphan audio survives
+ * HOME, MEDIA_STOP, BACK, even POWER. The only thing that kills it is
+ * force-quitting the Plex app process.
  *
- * Switch-while-playing: if Plex is already playing something on the target
- * and the user taps a new tile, we stop the current session first so the
- * new playMedia request can start cleanly without requiring a second tap.
+ * We approximate that programmatically by launching the Android TV
+ * launcher (com.google.android.tvlauncher) via HA's media_player.play_media.
+ * The Activity Manager evicts the Plex process when starting the launcher,
+ * which kills the stuck audio. Then we cold-launch Plex and issue the
+ * new playMedia. ~4-5 second gap on switches but reliable.
+ *
+ * THE CONDITIONAL PATH
+ *
+ * Reading the cast_entity (media_player.<device>_cast) tells us whether
+ * anything is currently playing on the target. That entity tracks actual
+ * playback state via Cast protocol — more reliable than Plex's own
+ * media_player entity which goes "unavailable" and is often stale.
+ *
+ *   cast.state in {playing, buffering, paused}  → BUSY path (teardown+play)
+ *   cast.state in {idle, off, unavailable}      → IDLE path (bare playMedia)
+ *
+ * Idle path is fast (~300ms). Busy path takes ~4-5s for the teardown.
+ *
+ * If cast_entity or android_tv_entity isn't configured, the endpoint
+ * falls back to bare playMedia — works for idle plays, fails on switches.
  */
 export const POST: RequestHandler = async ({ request }) => {
 	const plex = await loadPlexConfig();
@@ -49,40 +64,65 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 	const offset = Number.isFinite(body?.offset) ? Math.floor(body.offset) : 0;
 
-	// Parse the configured server URL into address/port/protocol
+	// Decide path: idle (bare play) vs busy (teardown+play).
+	// Default to idle when we can't determine state.
+	let path: 'idle' | 'busy' = 'idle';
+	const ha = await loadHaConnection();
+	if (ha && plex.cast_entity) {
+		try {
+			const castState = await readEntityState(ha, plex.cast_entity);
+			if (castState === 'playing' || castState === 'buffering' || castState === 'paused') {
+				path = 'busy';
+			}
+		} catch (err) {
+			console.warn('[plex/play] Could not read cast entity state, defaulting to idle path:', err);
+		}
+	}
+
+	// BUSY: tear down current Plex session, cold-launch Plex, then play
+	if (path === 'busy' && ha && plex.android_tv_entity) {
+		try {
+			await launchApp(ha, plex.android_tv_entity, 'com.google.android.tvlauncher');
+			// Wait for Activity Manager to evict Plex (kills orphan audio)
+			await sleep(1500);
+			await launchApp(ha, plex.android_tv_entity, 'com.plexapp.android');
+			// Wait for Plex to cold-start to its home screen
+			await sleep(2000);
+		} catch (err) {
+			// Non-fatal — if the teardown fails we still try playMedia.
+			// Worst case: same orphan-audio bug we'd have without the teardown.
+			console.warn('[plex/play] Busy-path teardown failed, falling through to playMedia:', err);
+		}
+	}
+
+	// Fire the actual play (same for both paths)
+	try {
+		await firePlayMedia(plex, ratingKey, offset);
+	} catch (err: any) {
+		console.error('[plex/play] playMedia failed:', err);
+		error(502, `Plex playback failed: ${err.message ?? 'unknown'}`);
+	}
+
+	return json({ action: 'play_dispatched', ratingKey, path });
+};
+
+/**
+ * Fire the Plex companion playMedia request.
+ */
+async function firePlayMedia(
+	plex: NonNullable<Awaited<ReturnType<typeof loadPlexConfig>>>,
+	ratingKey: string,
+	offset: number
+): Promise<void> {
 	let serverUrl: URL;
 	try {
 		serverUrl = new URL(plex.url ?? '');
 	} catch {
-		error(500, 'Plex url in configuration is invalid');
+		throw new Error('Plex url in configuration is invalid');
 	}
 	const protocol = serverUrl.protocol.replace(':', '');
 	const address = serverUrl.hostname;
 	const port = serverUrl.port || (protocol === 'https' ? '443' : '32400');
-
-	// Stop any existing playback on the target client. This fixes the
-	// double-tap-to-switch bug where switching media required two taps.
-	try {
-		await stopCurrentPlayback(plex);
-	} catch (err) {
-		// Non-fatal: just log and continue. If the client wasn't playing
-		// anything, Plex returns 200/404 either way — we don't care.
-		console.warn('[plex/play] stop attempt failed (non-fatal):', err);
-	}
-
-	// Optionally bring Plex to the foreground on the configured Android TV
-	// device by calling HA's media_player.play_media with media_content_type: app.
-	// We intentionally swallow errors here — if the app launch fails, we still
-	// try the playMedia call because the user might have Plex already open.
-	if (plex.android_tv_entity) {
-		try {
-			await launchPlexApp(plex.android_tv_entity);
-			// Brief settle so the Plex app is foregrounded before we send playMedia
-			await new Promise((resolve) => setTimeout(resolve, 1200));
-		} catch (err) {
-			console.warn('[plex/play] Could not launch Plex app on Android TV:', err);
-		}
-	}
 
 	const params = new URLSearchParams({
 		'X-Plex-Token': plex.account_token ?? plex.server_token ?? '',
@@ -99,62 +139,64 @@ export const POST: RequestHandler = async ({ request }) => {
 	});
 
 	const playUrl = `${plex.url?.replace(/\/$/, '')}/player/playback/playMedia?${params.toString()}`;
-
-	try {
-		const res = await fetch(playUrl, { method: 'POST' });
-		// Plex returns 200 with weird "Failure: 200 OK" body even on success.
-		// We trust the HTTP status code.
-		if (!res.ok) {
-			const text = await res.text().catch(() => '');
-			error(502, `Plex playback failed (${res.status}): ${text.slice(0, 200)}`);
-		}
-		return json({ action: 'play_dispatched', ratingKey });
-	} catch (err: any) {
-		console.error('[plex/play]', err);
-		error(502, `Plex playback request failed: ${err.message ?? 'unknown'}`);
+	const res = await fetch(playUrl, { method: 'POST' });
+	// Plex returns 200 with body "Failure: 200 OK" even on success.
+	// Trust the HTTP status, not the body.
+	if (!res.ok) {
+		const text = await res.text().catch(() => '');
+		throw new Error(`Plex API ${res.status}: ${text.slice(0, 200)}`);
 	}
-};
-
-/**
- * Send a stop command to the target client via Plex's player proxy.
- * Used to clear any current playback before issuing a new playMedia.
- */
-async function stopCurrentPlayback(
-	plex: NonNullable<Awaited<ReturnType<typeof loadPlexConfig>>>
-): Promise<void> {
-	const params = new URLSearchParams({
-		'X-Plex-Token': plex.account_token ?? plex.server_token ?? '',
-		'X-Plex-Client-Identifier': 'ha-fusion',
-		'X-Plex-Target-Client-Identifier': plex.target_client_id ?? '',
-		type: 'video'
-	});
-	const stopUrl = `${plex.url?.replace(/\/$/, '')}/player/playback/stop?${params.toString()}`;
-	await fetch(stopUrl, { method: 'POST' });
 }
 
 /**
- * Launch the Plex app on the configured Android TV via HA's
- * media_player.play_media service. Reads HA URL + token from
- * configuration.yaml (same place the rest of the app reads them).
+ * HA connection details: URL and long-lived access token, both read
+ * from configuration.yaml (the same source the rest of the app uses).
  */
-async function launchPlexApp(entityId: string): Promise<void> {
-	const raw = await readFile('./data/configuration.yaml', 'utf8').catch(() => '');
-	if (!raw.trim()) throw new Error('Cannot launch Plex app: configuration.yaml unreadable');
-	const config = (yaml.load(raw) || {}) as Configuration;
-	const hassUrl = process.env.HASS_URL || config.hassUrl;
-	const haToken = config.token;
-	if (!hassUrl || !haToken) {
-		throw new Error('Cannot launch Plex app: HA url/token not configured');
+type HaConnection = { url: string; token: string };
+
+async function loadHaConnection(): Promise<HaConnection | null> {
+	try {
+		const raw = await readFile('./data/configuration.yaml', 'utf8');
+		if (!raw.trim()) return null;
+		const config = (yaml.load(raw) || {}) as Configuration;
+		const url = (process.env.HASS_URL || config.hassUrl || '').replace(/\/$/, '');
+		const token = config.token || '';
+		if (!url || !token) return null;
+		return { url, token };
+	} catch {
+		return null;
 	}
-	const res = await fetch(`${hassUrl.replace(/\/$/, '')}/api/services/media_player/play_media`, {
+}
+
+/**
+ * Read the `state` field of an HA entity via the REST API.
+ * Returns the raw state string ("playing", "idle", "off", "unavailable", etc.).
+ */
+async function readEntityState(ha: HaConnection, entityId: string): Promise<string> {
+	const res = await fetch(`${ha.url}/api/states/${encodeURIComponent(entityId)}`, {
+		headers: { Authorization: `Bearer ${ha.token}` }
+	});
+	if (!res.ok) {
+		throw new Error(`HA states API ${res.status}`);
+	}
+	const data = (await res.json()) as { state?: string };
+	return String(data?.state ?? 'unknown');
+}
+
+/**
+ * Launch an Android app on the configured Android TV via HA's
+ * media_player.play_media service.
+ */
+async function launchApp(ha: HaConnection, entityId: string, appId: string): Promise<void> {
+	const res = await fetch(`${ha.url}/api/services/media_player/play_media`, {
 		method: 'POST',
 		headers: {
-			Authorization: `Bearer ${haToken}`,
+			Authorization: `Bearer ${ha.token}`,
 			'Content-Type': 'application/json'
 		},
 		body: JSON.stringify({
 			entity_id: entityId,
-			media_content_id: 'com.plexapp.android',
+			media_content_id: appId,
 			media_content_type: 'app'
 		})
 	});
@@ -162,4 +204,8 @@ async function launchPlexApp(entityId: string): Promise<void> {
 		const text = await res.text().catch(() => '');
 		throw new Error(`HA service call failed (${res.status}): ${text.slice(0, 150)}`);
 	}
+}
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
