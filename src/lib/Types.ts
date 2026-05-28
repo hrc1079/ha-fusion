@@ -21,6 +21,14 @@ export interface PlexConfig {
 	account_token?: string;
 	target_client_id?: string;
 	server_machine_id?: string;
+	/**
+	 * Optional. HA media_player entity for the device running the target
+	 * Plex client (e.g. `media_player.family_room_shield`). When set, the
+	 * server will launch the Plex app on this device before firing playMedia,
+	 * which solves the SHIELD foreground problem where playback starts but
+	 * the previously running app stays on screen.
+	 */
+	android_tv_entity?: string;
 }
 
 export interface Addons {
