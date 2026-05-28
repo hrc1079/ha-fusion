@@ -81,13 +81,15 @@
 			const plex_account_token = (form.plex_account_token as string) || undefined;
 			const plex_target_client_id = (form.plex_target_client_id as string) || undefined;
 			const plex_server_machine_id = (form.plex_server_machine_id as string) || undefined;
+			const plex_android_tv_entity = (form.plex_android_tv_entity as string) || undefined;
 			if (
 				plex_enabled ||
 				plex_url ||
 				plex_server_token ||
 				plex_account_token ||
 				plex_target_client_id ||
-				plex_server_machine_id
+				plex_server_machine_id ||
+				plex_android_tv_entity
 			) {
 				const plex: any = {};
 				if (plex_enabled) plex.enabled = true;
@@ -96,6 +98,7 @@
 				if (plex_account_token) plex.account_token = plex_account_token;
 				if (plex_target_client_id) plex.target_client_id = plex_target_client_id;
 				if (plex_server_machine_id) plex.server_machine_id = plex_server_machine_id;
+				if (plex_android_tv_entity) plex.android_tv_entity = plex_android_tv_entity;
 				json.plex = plex;
 				$configuration.plex = plex;
 			}
