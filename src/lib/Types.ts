@@ -22,13 +22,33 @@ export interface PlexConfig {
 	target_client_id?: string;
 	server_machine_id?: string;
 	/**
-	 * Optional. HA media_player entity for the device running the target
-	 * Plex client (e.g. `media_player.family_room_shield`). When set, the
-	 * server will launch the Plex app on this device before firing playMedia,
-	 * which solves the SHIELD foreground problem where playback starts but
-	 * the previously running app stays on screen.
+	 * Optional. HA media_player entity for the Android TV device hosting the
+	 * target Plex client (e.g. `media_player.family_room_shield`). This is
+	 * the androidtv_remote entity — used to launch apps on the device.
+	 *
+	 * Required for the "busy switch" path. When playing media that requires
+	 * replacing an active video session, the server fires:
+	 *   1. play_media(com.google.android.tvlauncher) — evicts Plex process
+	 *      (kills any orphan audio decoder from a prior session)
+	 *   2. play_media(com.plexapp.android) — cold-launches Plex to home
+	 *   3. Plex playMedia for the new content
+	 *
+	 * If not configured, the busy path falls back to a bare playMedia which
+	 * is known to leave orphan audio on the SHIELD Plex Android TV client.
 	 */
 	android_tv_entity?: string;
+	/**
+	 * Optional. HA media_player entity that reflects actual playback state
+	 * on the target device (e.g. `media_player.family_room_shield_cast`).
+	 * This is the Google Cast entity — it tracks media_position and
+	 * media_content_id in real time, unlike the Plex integration entity
+	 * which can be stale or "unavailable".
+	 *
+	 * When configured, the server reads this entity's state to decide
+	 * between idle-play (bare playMedia) and busy-switch (teardown+play).
+	 * If not configured, the endpoint always uses bare playMedia.
+	 */
+	cast_entity?: string;
 }
 
 export interface Addons {
