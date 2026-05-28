@@ -7,6 +7,7 @@
 	let account_token = $configuration?.plex?.account_token ?? '';
 	let target_client_id = $configuration?.plex?.target_client_id ?? '';
 	let server_machine_id = $configuration?.plex?.server_machine_id ?? '';
+	let android_tv_entity = $configuration?.plex?.android_tv_entity ?? '';
 	let enabled = $configuration?.plex?.enabled ?? false;
 
 	let testStatus: { kind: 'idle' | 'ok' | 'error'; message: string } = {
@@ -37,7 +38,8 @@
 				server_token,
 				account_token,
 				target_client_id,
-				server_machine_id
+				server_machine_id,
+				android_tv_entity
 			};
 
 			const saveRes = await fetch(`${base}/_api/save_config`, {
@@ -175,6 +177,18 @@
 	/>
 </div>
 
+<div class="field">
+	<label for="plex_android_tv">Android TV media_player entity (optional, fixes foreground)</label>
+	<input
+		id="plex_android_tv"
+		class="input"
+		type="text"
+		name="plex_android_tv_entity"
+		placeholder="media_player.family_room_shield"
+		bind:value={android_tv_entity}
+	/>
+</div>
+
 <div class="buttons">
 	<button
 		class="action"
@@ -244,6 +258,22 @@
 
 	.error {
 		color: #f92626;
+	}
+
+	.action {
+		padding: 0.55rem 1.2rem;
+		border: none;
+		border-radius: 0.5rem;
+		font-family: inherit;
+		font-size: 0.95rem;
+		font-weight: 500;
+		cursor: pointer;
+		background: rgba(255, 255, 255, 0.08);
+		color: inherit;
+	}
+
+	.action:hover:not(:disabled) {
+		background: rgba(255, 255, 255, 0.15);
 	}
 
 	.action[disabled] {
