@@ -81,15 +81,13 @@
 	onMount(load);
 </script>
 
-<div class="plex-row">
+<div class="plex-row" class:hidden={!loading && !errorMsg && items.length === 0}>
 	<div class="header">
 		<h3>{hubTitle || sel?.name || 'Plex'}</h3>
 		{#if loading}
 			<span class="meta">Loading…</span>
 		{:else if errorMsg}
 			<span class="meta error">{errorMsg}</span>
-		{:else if items.length === 0}
-			<span class="meta">No items</span>
 		{/if}
 	</div>
 
@@ -129,6 +127,10 @@
 		gap: 0.5rem;
 		padding: 0.5rem;
 		min-height: 0;
+	}
+
+	.plex-row.hidden {
+		display: none;
 	}
 
 	.header {
