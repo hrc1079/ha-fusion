@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { configuration, lang } from '$lib/Stores';
+	import { playPlexItem } from '$lib/Plex';
 
 	let url = $configuration?.plex?.url ?? '';
 	let server_token = $configuration?.plex?.server_token ?? '';
@@ -73,18 +74,7 @@
 			const item = data.items?.[0];
 			if (!item) throw new Error('No items in On Deck to test with');
 
-			const playRes = await fetch(`${base}/_api/plex/play`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					ratingKey: item.ratingKey,
-					hassUrl: $configuration?.hassUrl
-				})
-			});
-			if (!playRes.ok) {
-				const text = await playRes.text();
-				throw new Error(`Playback ${playRes.status}: ${text.slice(0, 120)}`);
-			}
+			await playPlexItem(item.ratingKey);
 			testStatus = {
 				kind: 'ok',
 				message: `Dispatched "${item.title}" via ADB intent`
@@ -101,8 +91,9 @@
 
 <p class="overflow">
 	Configure a Plex Media Server connection for the dashboard. The server token reads your library;
-	playback is dispatched via ADB to the configured Android TV device. Tokens are stored server-side
-	in configuration.yaml and never exposed to the browser.
+	playback is dispatched via ADB to the configured Android TV device, using the dashboard's existing
+	Home Assistant WebSocket connection. The server token is stored server-side in configuration.yaml
+	and never exposed to the browser.
 </p>
 
 <label class="checkbox">
