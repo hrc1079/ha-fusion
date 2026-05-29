@@ -30,6 +30,21 @@ import type { Configuration } from '$lib/Types';
  * from idle, cleanly REPLACES any active playback when fired during a video,
  * and works from any source app — all confirmed by live testing.
  *
+ * RELIABILITY: TEARDOWN BEFORE DEEP-LINK
+ *
+ * The bare deep-link intent is ~70% reliable when fired against a Plex client
+ * in various background states — sometimes the new playback starts but the
+ * video surface fails to bind, leaving audio playing over a black screen or
+ * stale Plex UI (same symptom as the companion API audio-orphan bug). The
+ * Plex Android TV client has a real video-surface bug around rapid playback
+ * context changes that is independent of which API is firing the play.
+ *
+ * Force-stopping the Plex process before each play is the reliable hammer:
+ * cold-launching Plex from a fresh process always binds the video surface
+ * correctly. Costs ~1.5–2 seconds per play (force-stop, brief settle, intent).
+ *
+ *   am force-stop com.plexapp.android   →   sleep ~500ms   →   am start ...
+ *
  * HA URL RESOLUTION (matches +page.server.ts pattern):
  *   1. process.env.HASS_URL — set via container env / .env file
  *   2. X-Proxy-Target request header — set when running through HA addon ingress
@@ -99,30 +114,54 @@ export const POST: RequestHandler = async ({ request }) => {
 	// Build the plex:// deep-link URI and the am start command.
 	// Single-quote the URI so the shell doesn't interpret the // and special chars.
 	const uri = `plex://server://${plex.server_machine_id}/com.plexapp.plugins.library/library/metadata/${ratingKey}`;
-	const command = `am start --ez "android.intent.extra.START_PLAYBACK" true -a android.intent.action.VIEW '${uri}'`;
+	const playCommand = `am start --ez "android.intent.extra.START_PLAYBACK" true -a android.intent.action.VIEW '${uri}'`;
+	const forceStopCommand = `am force-stop com.plexapp.android`;
 
 	try {
-		const res = await fetch(`${haUrl}/api/services/androidtv/adb_command`, {
-			method: 'POST',
-			headers: {
-				Authorization: `Bearer ${haToken}`,
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				entity_id: plex.adb_entity,
-				command
-			})
-		});
-		if (!res.ok) {
-			const text = await res.text().catch(() => '');
-			throw new Error(`HA androidtv.adb_command failed (${res.status}): ${text.slice(0, 200)}`);
-		}
+		// 1. Force-stop Plex — clears any zombie/orphan state from previous playback
+		await callAdb(haUrl, haToken, plex.adb_entity!, forceStopCommand);
+
+		// 2. Brief settle window — gives Android's ActivityManager time to fully
+		//    tear down the Plex process before we cold-launch it. ~500ms empirically
+		//    sufficient; longer waits don't improve reliability further.
+		await sleep(500);
+
+		// 3. Fire the deep-link intent — cold-launches Plex and starts playback
+		await callAdb(haUrl, haToken, plex.adb_entity!, playCommand);
+
 		return json({ action: 'play_dispatched', ratingKey });
 	} catch (err: any) {
 		console.error('[plex/play] ADB intent failed:', err);
 		error(502, `Plex playback failed: ${err.message ?? 'unknown'}`);
 	}
 };
+
+async function callAdb(
+	haUrl: string,
+	haToken: string,
+	entityId: string,
+	command: string
+): Promise<void> {
+	const res = await fetch(`${haUrl}/api/services/androidtv/adb_command`, {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${haToken}`,
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify({
+			entity_id: entityId,
+			command
+		})
+	});
+	if (!res.ok) {
+		const text = await res.text().catch(() => '');
+		throw new Error(`HA androidtv.adb_command failed (${res.status}): ${text.slice(0, 200)}`);
+	}
+}
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function loadHaToken(): Promise<string | null> {
 	try {
