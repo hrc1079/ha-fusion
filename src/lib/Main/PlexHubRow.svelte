@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
-	import { configuration } from '$lib/Stores';
+	import { playPlexItem } from '$lib/Plex';
 	import type { PlexHubRowItem } from '$lib/Types';
 
 	export let sel: PlexHubRowItem;
@@ -55,20 +55,9 @@
 		tappedAt = now;
 
 		try {
-			const res = await fetch(`${base}/_api/plex/play`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					ratingKey: item.ratingKey,
-					hassUrl: $configuration?.hassUrl
-				})
-			});
-			if (!res.ok) {
-				const text = await res.text();
-				console.error('Plex play failed:', res.status, text);
-			}
-		} catch (err) {
-			console.error('Plex play error:', err);
+			await playPlexItem(item.ratingKey);
+		} catch (err: any) {
+			console.error('Plex play error:', err?.message ?? err);
 		}
 	}
 
