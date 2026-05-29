@@ -7,7 +7,7 @@ import type { Configuration } from '$lib/Types';
 
 /**
  * POST /_api/plex/play
- * Body: { ratingKey: string }
+ * Body: { ratingKey: string, hassUrl?: string }
  *
  * Plays a Plex media item on the configured Android TV device by firing
  * a `plex://` deep-link intent via ADB.
@@ -26,16 +26,18 @@ import type { Configuration } from '$lib/Types';
  * request shape.
  *
  * The Android intent path is what Plex itself uses internally for
- * "open this item and play it" triggered by the Plex Android TV UI. The
- * intent is:
+ * "open this item and play it" triggered by the Plex Android TV UI. It works
+ * from idle, cleanly REPLACES any active playback when fired during a video,
+ * and works from any source app — all confirmed by live testing.
  *
- *   am start --ez "android.intent.extra.START_PLAYBACK" true \
- *            -a android.intent.action.VIEW \
- *            'plex://server://<machineId>/com.plexapp.plugins.library/library/metadata/<ratingKey>'
+ * HA URL RESOLUTION (matches +page.server.ts pattern):
+ *   1. process.env.HASS_URL — set via container env / .env file
+ *   2. X-Proxy-Target request header — set when running through HA addon ingress
+ *   3. body.hassUrl — client-supplied fallback (sent by PlexHubRow.svelte from
+ *      $configuration.hassUrl, which is already populated at page load)
  *
- * It works from idle (Plex closed or on home screen), and cleanly REPLACES
- * any active playback when fired during a video — both confirmed by live
- * testing.
+ * The token is read from configuration.yaml's top-level `token` key, the same
+ * place ha-fusion's WebSocket auth reads it from.
  *
  * REQUIREMENTS:
  *   - HA's legacy `androidtv` integration (ADB-based) installed against the
@@ -60,7 +62,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		);
 	}
 
-	let body;
+	let body: any;
 	try {
 		body = await request.json();
 	} catch {
@@ -72,16 +74,49 @@ export const POST: RequestHandler = async ({ request }) => {
 		error(400, 'ratingKey must be a numeric string');
 	}
 
+	// Resolve HA URL: env > proxy header > body-supplied
+	const haUrl = (
+		process.env.HASS_URL ||
+		request.headers.get('X-Proxy-Target') ||
+		String(body?.hassUrl ?? '')
+	)
+		.trim()
+		.replace(/\/$/, '');
+
+	if (!haUrl) {
+		error(
+			502,
+			'HA URL not resolvable. Set HASS_URL env var on the container, or ensure the dashboard is loaded with hassUrl configured.'
+		);
+	}
+
+	// Token comes from configuration.yaml's top-level `token` key (same as ha-fusion's WebSocket auth)
+	const haToken = await loadHaToken();
+	if (!haToken) {
+		error(502, 'HA token not configured (configuration.yaml missing `token`).');
+	}
+
 	// Build the plex:// deep-link URI and the am start command.
 	// Single-quote the URI so the shell doesn't interpret the // and special chars.
 	const uri = `plex://server://${plex.server_machine_id}/com.plexapp.plugins.library/library/metadata/${ratingKey}`;
 	const command = `am start --ez "android.intent.extra.START_PLAYBACK" true -a android.intent.action.VIEW '${uri}'`;
 
 	try {
-		await callHaService('androidtv', 'adb_command', {
-			entity_id: plex.adb_entity,
-			command
+		const res = await fetch(`${haUrl}/api/services/androidtv/adb_command`, {
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${haToken}`,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				entity_id: plex.adb_entity,
+				command
+			})
 		});
+		if (!res.ok) {
+			const text = await res.text().catch(() => '');
+			throw new Error(`HA androidtv.adb_command failed (${res.status}): ${text.slice(0, 200)}`);
+		}
 		return json({ action: 'play_dispatched', ratingKey });
 	} catch (err: any) {
 		console.error('[plex/play] ADB intent failed:', err);
@@ -89,43 +124,12 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 };
 
-/**
- * Fire an HA service via REST. Reads HA URL + token from configuration.yaml.
- */
-async function callHaService(
-	domain: string,
-	service: string,
-	serviceData: Record<string, unknown>
-): Promise<void> {
-	const ha = await loadHaConnection();
-	if (!ha) {
-		throw new Error('HA connection not configured (configuration.yaml missing hassUrl/token)');
-	}
-	const res = await fetch(`${ha.url}/api/services/${domain}/${service}`, {
-		method: 'POST',
-		headers: {
-			Authorization: `Bearer ${ha.token}`,
-			'Content-Type': 'application/json'
-		},
-		body: JSON.stringify(serviceData)
-	});
-	if (!res.ok) {
-		const text = await res.text().catch(() => '');
-		throw new Error(`HA ${domain}.${service} failed (${res.status}): ${text.slice(0, 200)}`);
-	}
-}
-
-type HaConnection = { url: string; token: string };
-
-async function loadHaConnection(): Promise<HaConnection | null> {
+async function loadHaToken(): Promise<string | null> {
 	try {
 		const raw = await readFile('./data/configuration.yaml', 'utf8');
 		if (!raw.trim()) return null;
 		const config = (yaml.load(raw) || {}) as Configuration;
-		const url = (process.env.HASS_URL || config.hassUrl || '').replace(/\/$/, '');
-		const token = config.token || '';
-		if (!url || !token) return null;
-		return { url, token };
+		return config.token || null;
 	} catch {
 		return null;
 	}
