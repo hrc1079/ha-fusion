@@ -13,6 +13,7 @@
 	import CustomCss from '$lib/Settings/CustomCss.svelte';
 	import Logout from '$lib/Settings/Logout.svelte';
 	import Plex from '$lib/Settings/Plex.svelte';
+	import Tidal from '$lib/Settings/Tidal.svelte';
 	import Ripple from 'svelte-ripple';
 
 	export let data: any;
@@ -97,6 +98,31 @@
 				$configuration.plex = plex;
 			}
 
+			// TIDAL configuration block — same shape as Plex: only persist
+			// when at least one field is set, so a fresh install doesn't get
+			// an empty `tidal:` stub written to configuration.yaml.
+			const tidal_enabled = form.tidal_enabled === 'true';
+			const tidal_client_id = (form.tidal_client_id as string) || undefined;
+			const tidal_client_secret = (form.tidal_client_secret as string) || undefined;
+			const tidal_country_code = (form.tidal_country_code as string) || undefined;
+			const tidal_adb_entity = (form.tidal_adb_entity as string) || undefined;
+			if (
+				tidal_enabled ||
+				tidal_client_id ||
+				tidal_client_secret ||
+				tidal_country_code ||
+				tidal_adb_entity
+			) {
+				const tidal: any = {};
+				if (tidal_enabled) tidal.enabled = true;
+				if (tidal_client_id) tidal.client_id = tidal_client_id;
+				if (tidal_client_secret) tidal.client_secret = tidal_client_secret;
+				if (tidal_country_code) tidal.country_code = tidal_country_code;
+				if (tidal_adb_entity) tidal.adb_entity = tidal_adb_entity;
+				json.tidal = tidal;
+				$configuration.tidal = tidal;
+			}
+
 			if (!formMotion) {
 				$motion = 0;
 				json.motion = false;
@@ -159,6 +185,8 @@
 			<CustomCss />
 
 			<Plex />
+
+			<Tidal />
 
 			<Motion />
 
