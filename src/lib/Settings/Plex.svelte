@@ -76,7 +76,10 @@
 			const playRes = await fetch(`${base}/_api/plex/play`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ ratingKey: item.ratingKey })
+				body: JSON.stringify({
+					ratingKey: item.ratingKey,
+					hassUrl: $configuration?.hassUrl
+				})
 			});
 			if (!playRes.ok) {
 				const text = await playRes.text();
