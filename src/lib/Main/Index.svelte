@@ -187,7 +187,7 @@
 
 	function itemStyles(type: string) {
 		const large = ['conditional_media', 'picture_elements', 'camera'];
-		const fullWidth = ['plex_hub_row'];
+		const fullWidth = ['plex_hub_row', 'tidal_row'];
 		if (fullWidth.includes(type)) {
 			return `
 				grid-column: 1 / -1;
