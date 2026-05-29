@@ -1,0 +1,233 @@
+<script lang="ts">
+	import { base } from '$app/paths';
+	import { onMount } from 'svelte';
+	import { playTidalItem, type TidalItemType } from '$lib/Tidal';
+	import type { TidalRowItem } from '$lib/Types';
+
+	export let sel: TidalRowItem;
+
+	type TidalItem = {
+		id: string;
+		type: TidalItemType;
+		title: string;
+		subtitle?: string;
+		imageUuid?: string;
+		duration?: number;
+	};
+
+	let items: TidalItem[] = [];
+	let rowTitle = '';
+	let loading = true;
+	let errorMsg: string | undefined;
+	let lastTapped: string | undefined;
+	let tappedAt = 0;
+
+	$: limit = sel?.limit && sel.limit > 0 ? sel.limit : 12;
+	$: source = sel?.source ?? '';
+
+	async function load() {
+		loading = true;
+		errorMsg = undefined;
+		try {
+			const res = await fetch(
+				`${base}/_api/tidal/rows?source=${encodeURIComponent(source)}&limit=${limit}`
+			);
+			if (!res.ok) {
+				const text = await res.text();
+				throw new Error(`(${res.status}) ${text.slice(0, 100)}`);
+			}
+			const data = await res.json();
+			items = data.items ?? [];
+			rowTitle = sel?.name || data.title || '';
+		} catch (err: any) {
+			errorMsg = err.message ?? 'Failed to load TIDAL content';
+		} finally {
+			loading = false;
+		}
+	}
+
+	async function play(item: TidalItem) {
+		// Double-tap protection: ignore if same item tapped within 1.5s.
+		// Important on touch dashboards where a tile tap can register twice
+		// before the cold-launch finishes.
+		const now = Date.now();
+		const key = `${item.type}:${item.id}`;
+		if (lastTapped === key && now - tappedAt < 1500) return;
+		lastTapped = key;
+		tappedAt = now;
+
+		try {
+			await playTidalItem(item.type, item.id);
+		} catch (err: any) {
+			console.error('TIDAL play error:', err?.message ?? err);
+		}
+	}
+
+	function imageSrc(item: TidalItem): string {
+		if (!item.imageUuid) return '';
+		// Match the displayed tile size — 320 is plenty for a ~9rem tile and
+		// avoids the bandwidth hit of pulling 640+ thumbs we'd just downscale.
+		return `${base}/_api/tidal/image?uuid=${encodeURIComponent(item.imageUuid)}&size=320x320`;
+	}
+
+	onMount(load);
+</script>
+
+<div class="tidal-row" class:hidden={!loading && !errorMsg && items.length === 0}>
+	<div class="header">
+		<h3>{rowTitle || sel?.name || 'TIDAL'}</h3>
+		{#if loading}
+			<span class="meta">Loading…</span>
+		{:else if errorMsg}
+			<span class="meta error">{errorMsg}</span>
+		{/if}
+	</div>
+
+	{#if !loading && !errorMsg && items.length > 0}
+		<div class="strip">
+			{#each items as item (item.type + ':' + item.id)}
+				<button
+					class="tile"
+					type="button"
+					on:click={() => play(item)}
+					title={item.title + (item.subtitle ? ' — ' + item.subtitle : '')}
+				>
+					{#if item.imageUuid}
+						<img class="cover" src={imageSrc(item)} alt={item.title} loading="lazy" />
+					{:else}
+						<div class="cover placeholder">No cover</div>
+					{/if}
+					<div class="title">{item.title}</div>
+					{#if item.subtitle}
+						<div class="subtitle">{item.subtitle}</div>
+					{/if}
+				</button>
+			{/each}
+		</div>
+	{/if}
+</div>
+
+<style>
+	.tidal-row {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding: 0.5rem;
+		min-height: 0;
+	}
+
+	.tidal-row.hidden {
+		display: none;
+	}
+
+	.header {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+
+	.header h3 {
+		margin: 0;
+		font-size: 1.1rem;
+		font-weight: 600;
+		color: var(--theme-button-color-on);
+	}
+
+	.meta {
+		font-size: 0.85rem;
+		opacity: 0.7;
+	}
+
+	.meta.error {
+		color: #f92626;
+		opacity: 1;
+	}
+
+	.strip {
+		display: flex;
+		gap: 0.6rem;
+		overflow-x: auto;
+		overflow-y: hidden;
+		padding-bottom: 0.4rem;
+		scroll-snap-type: x mandatory;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	.strip::-webkit-scrollbar {
+		height: 6px;
+	}
+
+	.strip::-webkit-scrollbar-thumb {
+		background: rgba(255, 255, 255, 0.18);
+		border-radius: 3px;
+	}
+
+	.tile {
+		flex: 0 0 auto;
+		width: 9rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		background: transparent;
+		border: none;
+		padding: 0;
+		text-align: left;
+		color: inherit;
+		cursor: pointer;
+		scroll-snap-align: start;
+		transition: transform 0.12s ease;
+	}
+
+	.tile:hover,
+	.tile:focus-visible {
+		transform: scale(1.03);
+	}
+
+	.tile:focus-visible {
+		outline: 2px solid #00ffff; /* TIDAL cyan */
+		outline-offset: 2px;
+		border-radius: 0.5rem;
+	}
+
+	.cover {
+		width: 100%;
+		aspect-ratio: 1 / 1; /* music covers are square */
+		object-fit: cover;
+		border-radius: 0.5rem;
+		background: rgba(0, 0, 0, 0.3);
+		box-shadow:
+			0 4px 12px rgba(0, 0, 0, 0.4),
+			0 1px 2px rgba(0, 0, 0, 0.2);
+	}
+
+	.placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0.8rem;
+		opacity: 0.6;
+	}
+
+	.title {
+		font-size: 0.85rem;
+		font-weight: 500;
+		line-height: 1.2;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	.subtitle {
+		font-size: 0.75rem;
+		opacity: 0.7;
+		line-height: 1.2;
+		display: -webkit-box;
+		-webkit-line-clamp: 1;
+		line-clamp: 1;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+</style>
