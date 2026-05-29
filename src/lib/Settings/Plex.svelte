@@ -4,11 +4,8 @@
 
 	let url = $configuration?.plex?.url ?? '';
 	let server_token = $configuration?.plex?.server_token ?? '';
-	let account_token = $configuration?.plex?.account_token ?? '';
-	let target_client_id = $configuration?.plex?.target_client_id ?? '';
 	let server_machine_id = $configuration?.plex?.server_machine_id ?? '';
-	let android_tv_entity = $configuration?.plex?.android_tv_entity ?? '';
-	let cast_entity = $configuration?.plex?.cast_entity ?? '';
+	let adb_entity = $configuration?.plex?.adb_entity ?? '';
 	let enabled = $configuration?.plex?.enabled ?? false;
 
 	let testStatus: { kind: 'idle' | 'ok' | 'error'; message: string } = {
@@ -24,24 +21,19 @@
 
 	/**
 	 * Save the in-form values to /data/configuration.yaml first, then call
-	 * /_api/plex/hubs with source=continue_watching as a smoke test.
+	 * /_api/plex/hubs with source=on_deck as a smoke test for library reads.
 	 */
 	async function testConnection() {
 		testInFlight = true;
 		testStatus = { kind: 'idle', message: '' };
 		try {
-			// Build a merged configuration with the in-form Plex values so the
-			// test reflects what the user has typed (not just saved state).
 			const merged: any = { ...$configuration };
 			merged.plex = {
 				enabled: true,
 				url,
 				server_token,
-				account_token,
-				target_client_id,
 				server_machine_id,
-				android_tv_entity,
-				cast_entity
+				adb_entity
 			};
 
 			const saveRes = await fetch(`${base}/_api/save_config`, {
@@ -75,7 +67,6 @@
 		testInFlight = true;
 		testStatus = { kind: 'idle', message: '' };
 		try {
-			// Pull the first On Deck item and try to play it
 			const hubsRes = await fetch(`${base}/_api/plex/hubs?source=on_deck&limit=1`);
 			if (!hubsRes.ok) throw new Error(`Could not fetch a test item (${hubsRes.status})`);
 			const data = await hubsRes.json();
@@ -93,7 +84,7 @@
 			}
 			testStatus = {
 				kind: 'ok',
-				message: `Playing "${item.title}" on target client`
+				message: `Dispatched "${item.title}" via ADB intent`
 			};
 		} catch (err: any) {
 			testStatus = { kind: 'error', message: err.message ?? 'Unknown error' };
@@ -106,8 +97,9 @@
 <h2>{$lang ? $lang('plex') || 'Plex' : 'Plex'}</h2>
 
 <p class="overflow">
-	Configure a Plex Media Server connection for the dashboard. Tokens are stored server-side in
-	configuration.yaml and never exposed to the browser.
+	Configure a Plex Media Server connection for the dashboard. The server token reads your library;
+	playback is dispatched via ADB to the configured Android TV device. Tokens are stored server-side
+	in configuration.yaml and never exposed to the browser.
 </p>
 
 <label class="checkbox">
@@ -142,20 +134,6 @@
 </div>
 
 <div class="field">
-	<label for="plex_account_token">Account token (controls playback)</label>
-	<input
-		id="plex_account_token"
-		class="input"
-		type="password"
-		name="plex_account_token"
-		placeholder="From plex.tv myPlexAccessToken"
-		bind:value={account_token}
-		on:focus={maskFocus}
-		on:blur={maskFocus}
-	/>
-</div>
-
-<div class="field">
 	<label for="plex_machine">Server machine identifier</label>
 	<input
 		id="plex_machine"
@@ -168,39 +146,19 @@
 </div>
 
 <div class="field">
-	<label for="plex_client">Target client identifier (where to play)</label>
+	<label for="plex_adb">ADB media_player entity (HA legacy androidtv integration)</label>
 	<input
-		id="plex_client"
+		id="plex_adb"
 		class="input"
 		type="text"
-		name="plex_target_client_id"
-		placeholder="e.g. fd1530f90cf2d360-com-plexapp-android"
-		bind:value={target_client_id}
+		name="plex_adb_entity"
+		placeholder="media_player.android_tv_192_168_4_21"
+		bind:value={adb_entity}
 	/>
-</div>
-
-<div class="field">
-	<label for="plex_android_tv">Android TV media_player entity (optional, fixes foreground)</label>
-	<input
-		id="plex_android_tv"
-		class="input"
-		type="text"
-		name="plex_android_tv_entity"
-		placeholder="media_player.family_room_shield"
-		bind:value={android_tv_entity}
-	/>
-</div>
-
-<div class="field">
-	<label for="plex_cast">Cast media_player entity (optional, enables clean switches)</label>
-	<input
-		id="plex_cast"
-		class="input"
-		type="text"
-		name="plex_cast_entity"
-		placeholder="media_player.family_room_shield_cast"
-		bind:value={cast_entity}
-	/>
+	<p class="hint">
+		The entity created by HA's <em>Android TV</em> integration (NOT "Android TV Remote"). Requires Network
+		ADB enabled on the device.
+	</p>
 </div>
 
 <div class="buttons">
@@ -214,7 +172,7 @@
 	<button
 		class="action"
 		on:click|preventDefault={testPlayback}
-		disabled={testInFlight || !target_client_id || !server_machine_id}
+		disabled={testInFlight || !server_machine_id || !adb_entity}
 	>
 		Test playback
 	</button>
@@ -231,6 +189,12 @@
 		margin-block-end: 0.6rem;
 		font-size: 0.9rem;
 		opacity: 0.75;
+	}
+
+	.hint {
+		margin-block: 0.2rem 0;
+		font-size: 0.8rem;
+		opacity: 0.6;
 	}
 
 	.checkbox {
