@@ -12,6 +12,7 @@ export interface Configuration {
 	addons?: Addons;
 	token?: string;
 	plex?: PlexConfig;
+	tidal?: TidalConfig;
 }
 
 export interface PlexConfig {
@@ -29,6 +30,43 @@ export interface PlexConfig {
 	 * Setup: HA → Settings → Integrations → Add Integration → "Android TV"
 	 * (NOT "Android TV Remote"). The SHIELD must have Developer Options
 	 * enabled with Network ADB debugging on.
+	 */
+	adb_entity?: string;
+}
+
+export interface TidalConfig {
+	enabled?: boolean;
+	/**
+	 * OAuth 2.1 client credentials from a TIDAL developer app.
+	 * Create at https://developer.tidal.com/dashboard → "Create app".
+	 * These read the public TIDAL catalog (catalog search, album / artist /
+	 * track lookup by ID). They CANNOT read user-owned data — favorites,
+	 * mixes, "My playlists", "For You" — that requires the OAuth
+	 * authorization-code + PKCE flow with per-user login, which this
+	 * integration does not yet implement. Browse rows here are therefore
+	 * limited to public-catalog sources (search / album / track / artist_top).
+	 *
+	 * Stored server-side in configuration.yaml; never exposed to the browser.
+	 */
+	client_id?: string;
+	client_secret?: string;
+	/**
+	 * ISO 3166-1 alpha-2 country code (e.g. "US", "GB", "DE"). Required by
+	 * the TIDAL API on every catalog call — content availability and the
+	 * top-tracks/top-albums lists are region-specific. Defaults to "US"
+	 * if unset.
+	 */
+	country_code?: string;
+	/**
+	 * Required for playback. The HA media_player entity created by the
+	 * LEGACY `androidtv` (ADB) integration — same one used by the Plex
+	 * integration. Playback fires an Android App Link intent to
+	 * `com.aspiro.tidal` with a `https://tidal.com/browse/<type>/<id>` URL,
+	 * which the installed TIDAL Android TV app handles.
+	 *
+	 * Setup: install TIDAL from Play Store on the SHIELD, log in once,
+	 * then HA → Settings → Integrations → "Android TV" (NOT "Android TV
+	 * Remote"). Requires Network ADB enabled on the device.
 	 */
 	adb_entity?: string;
 }
@@ -149,6 +187,35 @@ export interface PlexHubRowItem {
 	 * Supported values:
 	 *  - "continue_watching"        → /hubs/continueWatching
 	 *  - "section_recent:<id>"      → /library/sections/<id>/recentlyAdded
+	 */
+	source: string;
+	/** Display name shown above the row */
+	name?: string;
+	/** Maximum number of items to fetch and render (default 12) */
+	limit?: number;
+}
+
+export interface TidalRowItem {
+	type: 'tidal_row';
+	id: number;
+	/**
+	 * Identifier for which set of catalog content to render. Format is
+	 * `<kind>:<arg>`. Supported kinds (all use OAuth client-credentials):
+	 *
+	 *  - "search:<query>"        Top results for the query (the API
+	 *                            returns a mix of albums + tracks; the
+	 *                            row picks the most relevant N).
+	 *  - "albums:<id>,<id>,…"    Curated list of album IDs. Each tile
+	 *                            is one album; tap opens the album in
+	 *                            the TIDAL Android app.
+	 *  - "tracks:<id>,<id>,…"    Curated list of track IDs. Each tile
+	 *                            is one track; tap opens the track.
+	 *  - "artist_top:<id>"       Top tracks for one artist.
+	 *
+	 * Examples:
+	 *   "search:dark side of the moon"
+	 *   "albums:217462643,275895576"
+	 *   "artist_top:3672"
 	 */
 	source: string;
 	/** Display name shown above the row */
