@@ -11,6 +11,26 @@ export interface Configuration {
 	motion?: boolean;
 	addons?: Addons;
 	token?: string;
+	plex?: PlexConfig;
+}
+
+export interface PlexConfig {
+	enabled?: boolean;
+	url?: string;
+	server_token?: string;
+	server_machine_id?: string;
+	/**
+	 * Required for playback. The HA media_player entity created by the
+	 * LEGACY `androidtv` (ADB) integration — NOT the `androidtv_remote`
+	 * one. Looks like `media_player.android_tv_192_168_4_21`. This is
+	 * the entity that exposes the `androidtv.adb_command` service we
+	 * use to fire the `plex://` deep-link intent.
+	 *
+	 * Setup: HA → Settings → Integrations → Add Integration → "Android TV"
+	 * (NOT "Android TV Remote"). The SHIELD must have Developer Options
+	 * enabled with Network ADB debugging on.
+	 */
+	adb_entity?: string;
 }
 
 export interface Addons {
@@ -119,6 +139,22 @@ export interface ButtonItem {
 			service?: string;
 		};
 	};
+}
+
+export interface PlexHubRowItem {
+	type: 'plex_hub_row';
+	id: number;
+	/**
+	 * Identifier for which set of media to render.
+	 * Supported values:
+	 *  - "continue_watching"        → /hubs/continueWatching
+	 *  - "section_recent:<id>"      → /library/sections/<id>/recentlyAdded
+	 */
+	source: string;
+	/** Display name shown above the row */
+	name?: string;
+	/** Maximum number of items to fetch and render (default 12) */
+	limit?: number;
 }
 
 export interface Template {
