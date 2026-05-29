@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
+	import { configuration } from '$lib/Stores';
 	import type { PlexHubRowItem } from '$lib/Types';
 
 	export let sel: PlexHubRowItem;
@@ -57,7 +58,10 @@
 			const res = await fetch(`${base}/_api/plex/play`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ ratingKey: item.ratingKey })
+				body: JSON.stringify({
+					ratingKey: item.ratingKey,
+					hassUrl: $configuration?.hassUrl
+				})
 			});
 			if (!res.ok) {
 				const text = await res.text();
