@@ -8,6 +8,7 @@
 	let target_client_id = $configuration?.plex?.target_client_id ?? '';
 	let server_machine_id = $configuration?.plex?.server_machine_id ?? '';
 	let android_tv_entity = $configuration?.plex?.android_tv_entity ?? '';
+	let cast_entity = $configuration?.plex?.cast_entity ?? '';
 	let enabled = $configuration?.plex?.enabled ?? false;
 
 	let testStatus: { kind: 'idle' | 'ok' | 'error'; message: string } = {
@@ -39,7 +40,8 @@
 				account_token,
 				target_client_id,
 				server_machine_id,
-				android_tv_entity
+				android_tv_entity,
+				cast_entity
 			};
 
 			const saveRes = await fetch(`${base}/_api/save_config`, {
@@ -186,6 +188,18 @@
 		name="plex_android_tv_entity"
 		placeholder="media_player.family_room_shield"
 		bind:value={android_tv_entity}
+	/>
+</div>
+
+<div class="field">
+	<label for="plex_cast">Cast media_player entity (optional, enables clean switches)</label>
+	<input
+		id="plex_cast"
+		class="input"
+		type="text"
+		name="plex_cast_entity"
+		placeholder="media_player.family_room_shield_cast"
+		bind:value={cast_entity}
 	/>
 </div>
 
